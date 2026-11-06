@@ -1,0 +1,1438 @@
+  <!DOCTYPE html>
+  <html lang="ar" dir="rtl" class="dark">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام مراقبة صحة رواد الفضاء - ناسا</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- استدعاء مكتبات Firebase السحابية -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+      import { getFirestore, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+      
+      const firebaseConfig = {
+        apiKey: "AIzaSyAlYkyB6FBYuZwmQORZ9EobjuK7qjHpKuo",
+        authDomain: "nasa-space-health.firebaseapp.com",
+        projectId: "nasa-space-health",
+        storageBucket: "nasa-space-health.firebasestorage.app",
+        messagingSenderId: "611202484154",
+        appId: "1:611202484154:web:9c8d0da266a49d00f5bf83",
+        measurementId: "G-J2WPZ771LL"
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      
+      window.db = db;
+      window.firebaseModules = { doc, setDoc, onSnapshot, getDoc };
+    </script>
+  </head>
+
+  <body class="bg-slate-950 text-white min-h-screen p-4 sm:p-6 flex items-center justify-center relative">
+
+  <!-- ================= شاشة اللودر المميزة (3 ثوانٍ) ================= -->
+  <div id="app-loader" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0C2D57] transition-opacity duration-700">
+    <div class="relative flex items-center justify-center p-8">
+      <div class="absolute w-40 h-40 rounded-full border-2 border-dashed border-[#FC6736] animate-spin"></div>
+      <img src="/logo.jpeg" alt="Logo" class="w-28 h-28 object-contain rounded-2xl drop-shadow-[0_0_25px_rgba(252,103,54,0.8)] animate-pulse">
+    </div>
+    <div class="mt-8 text-center space-y-3">
+      <h2 class="text-base font-mono tracking-widest text-[#FC6736] uppercase animate-pulse">     Space Doctor...</h2>
+      <div class="w-64 h-1.5 bg-slate-800 rounded-full overflow-hidden mx-auto border border-slate-700">
+        <div id="loader-progress" class="h-full bg-[#FC6736] transition-all duration-300 w-full"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- خلفية الفضاء والنجوم التفاعلية -->
+  <canvas id="space-canvas" class="fixed inset-0 pointer-events-none z-0"></canvas>
+
+    <!-- ================= شاشة تسجيل الدخول / إنشاء الحساب ================= -->
+  <div id="onboarding-screen" class="relative z-10 w-full max-w-md p-8 rounded-3xl shadow-2xl space-y-6" style="background-color: rgba(12, 45, 87, 0.85); border: 1px solid rgba(252, 103, 54, 0.3);">
+      <div class="text-center space-y-1">
+        <span class="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 px-3 py-1 rounded-full">NASA CLOUD // TELEMETRY</span>
+        <h1 id="form-title" class="text-xl font-bold mt-3">تسجيل دخول طاقم المهمة</h1>
+        <p id="form-desc" class="text-xs text-slate-400">أدخل رقم السوار الخاص بك للمتابعة</p>
+      </div>
+
+      <!-- تبديل الأوضاع -->
+      <div class="flex bg-slate-950 p-1 rounded-2xl border border-slate-800 text-xs">
+        <button type="button" id="tab-login" onclick="switchMode('login')" class="flex-1 py-2 rounded-xl font-bold bg-cyan-600 text-white transition-all cursor-pointer">تسجيل دخول</button>
+        <button type="button" id="tab-signup" onclick="switchMode('signup')" class="flex-1 py-2 rounded-xl text-slate-400 transition-all cursor-pointer">حساب جديد</button>
+      </div>
+
+      <form id="onboarding-form" class="space-y-4">
+        <div id="name-field-container" class="hidden">
+          <label class="text-xs text-slate-400 block mb-1">اسم رائد الفضاء</label>
+          <input type="text" id="astronaut-name" placeholder="مثال: زياد حماده" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-cyan-500">
+        </div>
+
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">رقم السوار الذكي (Wristband ID)</label>
+          <input type="text" id="wristband-id" placeholder="مثال: Z-1" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs font-mono text-white focus:outline-none focus:border-cyan-500" required>
+        </div>
+
+        <div id="photo-field-container" class="hidden">
+          <label class="text-xs text-slate-400 block mb-1">صورة رائد الفضاء (اختياري)</label>
+          <input type="file" id="astronaut-photo" accept="image/*" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-cyan-500/10 file:text-cyan-400 hover:file:bg-cyan-500/20">
+        </div>
+
+        <button type="submit" id="submit-btn" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3.5 rounded-xl transition-all text-xs shadow-lg shadow-cyan-600/20 cursor-pointer">
+          دخول لوحة القيادة
+        </button>
+      </form>
+  </div>
+
+    <!-- ================= لوحة القيادة والتحكم ================= -->
+    <div id="dashboard-screen" class="w-full max-w-7xl mx-auto space-y-6 hidden relative z-10">
+      <header class="bg-slate-900 border border-slate-800 p-6 rounded-3xl flex flex-wrap justify-between items-center gap-4 shadow-xl">
+        <div class="flex items-center gap-4">
+          <div class="relative">
+            <img id="db-photo" src="" alt="Astronaut" class="w-16 h-16 rounded-2xl object-cover border-2 border-cyan-500/40">
+            <span class="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-slate-900 rounded-full animate-pulse"></span>
+          </div>
+          <div>
+            <span id="db-wristband" class="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 px-2.5 py-0.5 rounded-full">WB-000</span>
+            <h2 id="db-name" class="text-xl font-bold mt-1">-</h2>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <div class="text-left px-4 py-2 bg-slate-950/60 rounded-2xl border border-slate-800">
+            <span class="text-[10px] text-slate-400 block">حالة النظام الطبي (سحابي)</span>
+            <span id="db-global-status" class="text-xs font-mono font-bold text-emerald-400">NOMINAL (طبيعي)</span>
+          </div>
+          <button id="logout-btn" class="bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-xs px-4 py-3 rounded-2xl transition-all cursor-pointer">
+            قطع الاتصال والخروج
+          </button>
+        </div>
+      </header>
+
+      <!-- شبكة المؤشرات الحيوية -->
+      <div id="metrics-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+
+      <!-- تقرير الإنذارات المباشر: يظهر أسفل المؤشرات عند اكتشاف أي قراءة خارج النطاق -->
+      <section id="live-warning-report" class="hidden bg-slate-900 border border-red-500/40 p-5 sm:p-6 rounded-3xl shadow-xl space-y-4" aria-live="assertive" aria-atomic="false">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <span class="text-[10px] font-mono text-red-300 tracking-wider">LIVE MEDICAL ALERT REPORT</span>
+            <h3 class="text-base font-bold text-red-300 mt-1">⚠️ تقرير التحذيرات الطبية المباشر</h3>
+            <p id="warning-report-summary" class="text-xs text-slate-400 mt-1"></p>
+          </div>
+          <span id="warning-report-count" class="text-xs font-bold bg-red-500/15 text-red-300 border border-red-500/30 rounded-full px-3 py-2"></span>
+        </div>
+        <div id="warning-report-list" class="grid grid-cols-1 lg:grid-cols-2 gap-3"></div>
+        <p class="text-[10px] leading-relaxed text-slate-500 border-t border-slate-800 pt-3">
+          هذا تنبيه آلي مبني على الحدود المسجلة في النظام، وليس تشخيصاً طبياً. عند ظهور قراءة غير طبيعية أبلغ المسؤول الطبي واتبع بروتوكول الطوارئ المعتمد؛ لا تعتمد على هذه الإرشادات وحدها.
+        </p>
+      </section>
+
+      <!-- ================= مراقبة العزلة والبيئة الفضائية ================= -->
+      <section class="bg-slate-900 border border-cyan-500/20 p-5 sm:p-6 rounded-3xl space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <span class="text-[10px] font-mono tracking-widest text-cyan-400">SPACE ENVIRONMENT & ISOLATION</span>
+            <h3 class="text-base font-bold text-white mt-1">مراقبة العزلة والإشعاع والبيئة المغلقة</h3>
+            <p class="text-[11px] text-slate-400 mt-1">قراءات بيئية ومحاكاة لمؤشرات الرفاه النفسي والسلوكي</p>
+          </div>
+          <span id="environment-global-status" class="text-[10px] font-bold rounded-full px-3 py-2 bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">البيئة مستقرة</span>
+        </div>
+
+        <div>
+          <h4 class="text-xs font-bold text-orange-300 mb-3">☢️ أولاً: مستشعرات الإشعاع الفضائي</h4>
+          <div id="radiation-sensors-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+        </div>
+        <div class="border-t border-slate-800 pt-4">
+          <h4 class="text-xs font-bold text-cyan-300 mb-3">🌬️ ثانياً: مستشعرات البيئة المغلقة وجودة الهواء</h4>
+          <div id="environment-sensors-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+        </div>
+        <div class="border-t border-slate-800 pt-4">
+          <h4 class="text-xs font-bold text-purple-300 mb-3">🧠 ثالثاً: مؤشرات العزلة والرفاه النفسي</h4>
+          <p class="text-[10px] text-slate-500 mb-3">هذه المؤشرات تعتمد على تسجيل الرائد اليومي أو بيانات أجهزة قابلة للربط، وليست قياساً نفسياً تشخيصياً.</p>
+          <div id="isolation-sensors-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+        </div>
+      </section>
+
+      <!-- تقرير تأثير البيئة والعزلة -->
+      <section id="environment-impact-report" class="hidden bg-slate-900 border border-orange-500/40 p-5 sm:p-6 rounded-3xl space-y-3" aria-live="polite">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <span class="text-[10px] font-mono text-orange-300">ENVIRONMENTAL & ISOLATION REPORT</span>
+            <h3 class="text-base font-bold text-orange-200 mt-1">⚠️ تقرير تأثير البيئة والعزلة</h3>
+            <p id="environment-impact-summary" class="text-xs text-slate-400 mt-1"></p>
+          </div>
+          <span id="environment-impact-count" class="text-[10px] font-bold bg-orange-500/10 text-orange-200 border border-orange-500/30 rounded-full px-3 py-2"></span>
+        </div>
+        <div id="environment-impact-list" class="grid grid-cols-1 lg:grid-cols-2 gap-3"></div>
+        <p class="text-[10px] leading-relaxed text-slate-500 border-t border-slate-800 pt-3">حدود التنبيه في هذا النموذج تجريبية وقابلة للضبط وليست حدود تعرض فضائية معتمدة أو تشخيصاً طبياً. يجب اعتماد الحدود الفعلية من مسؤول السلامة ومراجع المهمة، واستخدام مستشعرات معايرة. مؤشرات النوم والتوتر والمزاج تحتاج إدخالاً ذاتياً أو جهازاً مخصصاً.</p>
+      </section>
+
+      <!-- قسم البروتوكولات الطبية -->
+      <div class="bg-slate-900 border border-slate-800 p-6 rounded-3xl space-y-4">
+        <h3 class="text-sm font-bold text-cyan-400">التوصيات وبروتوكولات الطوارئ الطبية</h3>
+        <div id="protocol-content" class="space-y-3 text-xs"></div>
+      </div>
+    </div>
+
+    <!-- ================= المساعد الإرشادي الصحي المعتمد على ملف JSON ================= -->
+    <div id="emergency-chat-widget" class="fixed bottom-6 right-6 z-[9999] flex flex-col items-end hidden">
+      <div id="chat-window" class="hidden w-80 sm:w-96 bg-slate-900 border border-[#FC6736]/50 rounded-3xl shadow-2xl overflow-hidden mb-4 transition-all duration-300 transform scale-95 opacity-0">
+        <div class="bg-gradient-to-r from-[#0C2D57] to-slate-900 p-4 border-b border-slate-800 flex justify-between items-center">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+            <div>
+              <h3 class="text-xs font-bold text-white">المساعد الإرشادي الصحي</h3>
+              <p class="text-[10px] text-slate-400 mt-1">إرشادات محلية من قاعدة البيانات الطبية</p>
+            </div>
+          </div>
+          <button onclick="toggleChatWindow()" class="text-slate-400 hover:text-white text-xs font-bold cursor-pointer">✕</button>
+        </div>
+
+        <div id="chat-messages-body" class="p-4 space-y-3 max-h-80 overflow-y-auto text-xs text-slate-300">
+          <div class="p-3 bg-slate-800/80 rounded-2xl rounded-tr-none border border-slate-700">
+            <p class="text-cyan-400 font-bold mb-1">المساعد الصحي:</p>
+            <p>أهلاً بك. سأعرض إرشادات وأسئلة مرتبطة بالمؤشرات الحيوية المسجلة في لوحة المتابعة.</p>
+          </div>
+        </div>
+
+        <div class="px-3 pt-3 bg-slate-950 border-t border-slate-800">
+          <p class="text-[10px] text-slate-400 mb-2">اقتراحات مرتبطة بالحالة الحالية</p>
+          <div id="chat-suggestions" class="flex flex-wrap gap-2 pb-3">
+            <span class="text-[10px] text-slate-500">في انتظار تحميل بيانات المؤشرات...</span>
+          </div>
+          <p class="text-[10px] text-slate-400 mb-2">أسئلة سريعة</p>
+          <div id="chat-quick-questions" class="flex flex-wrap gap-2 pb-3"></div>
+        </div>
+
+        <div class="p-3 bg-slate-950 border-t border-slate-800 flex gap-2">
+          <input type="text" id="astronaut-chat-input" onkeypress="handleKeyPress(event)" placeholder="اكتب سؤالك عن المؤشرات..." class="flex-1 min-w-0 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500">
+          <button onclick="sendAstronautMessage()" class="bg-[#FC6736] hover:bg-opacity-90 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer">إرسال</button>
+        </div>
+      </div>
+
+      <button onclick="toggleChatWindow()" class="relative bg-[#0C2D57] hover:bg-[#123b73] text-white p-4 rounded-full shadow-2xl border-2 border-[#FC6736] flex items-center justify-center transition-all transform hover:scale-105 cursor-pointer" aria-label="فتح المساعد الصحي">
+        <svg class="w-6 h-6 text-[#FC6736]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+        </svg>
+        <span id="chat-badge" class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold min-w-5 h-5 px-1 rounded-full flex items-center justify-center border-2 border-slate-950 hidden">0</span>
+      </button>
+    </div>
+
+    <!-- السكربت البرمجي الرئيسي -->
+    <script>
+      let currentSession = JSON.parse(localStorage.getItem('current_session')) || null;
+      let unsubscribeSnapshot = null;
+      let authMode = 'login';
+      let simulationCounter = 0; 
+      let latestMetrics = null;
+      let latestEnvironment = null;
+      let latestWellbeing = null;
+      let medicalKnowledge = null;
+      let activeAlertIds = [];
+      let lastAlertSignature = "";
+      let astronautName = "زياد";
+
+      // مفتاح Gemini API الحقيقي الخاص بك
+
+      const onboardingScreen = document.getElementById('onboarding-screen');
+      const dashboardScreen = document.getElementById('dashboard-screen');
+      const onboardingForm = document.getElementById('onboarding-form');
+      const logoutBtn = document.getElementById('logout-btn');
+
+      window.addEventListener("DOMContentLoaded", () => {
+        loadMedicalKnowledge();
+        const loader = document.getElementById("app-loader");
+        if (loader) {
+          setTimeout(() => {
+            loader.classList.add("opacity-0", "pointer-events-none");
+            setTimeout(() => { loader.style.display = "none"; }, 700);
+          }, 3000);
+        }
+
+        if (currentSession && window.db) {
+          showDashboard(currentSession.wristband);
+        }
+      });
+
+      window.switchMode = function(mode) {
+        authMode = mode;
+        const title = document.getElementById('form-title');
+        const desc = document.getElementById('form-desc');
+        const nameContainer = document.getElementById('name-field-container');
+        const photoContainer = document.getElementById('photo-field-container');
+        const submitBtn = document.getElementById('submit-btn');
+        const tabLogin = document.getElementById('tab-login');
+        const tabSignup = document.getElementById('tab-signup');
+
+        if (mode === 'login') {
+          title.textContent = "تسجيل دخول طاقم المهمة";
+          desc.textContent = "أدخل رقم السوار الخاص بك للمتابعة";
+          nameContainer.classList.add('hidden');
+          photoContainer.classList.add('hidden');
+          document.getElementById('astronaut-name').removeAttribute('required');
+          submitBtn.textContent = "دخول لوحة القيادة";
+          
+          tabLogin.className = "flex-1 py-2 rounded-xl font-bold bg-cyan-600 text-white transition-all cursor-pointer";
+          tabSignup.className = "flex-1 py-2 rounded-xl text-slate-400 transition-all cursor-pointer";
+        } else {
+          title.textContent = "إنشاء حساب سوار جديد";
+          desc.textContent = "سجل بيانات السوار والرائد لأول مرة";
+          nameContainer.classList.remove('hidden');
+          photoContainer.classList.remove('hidden');
+          document.getElementById('astronaut-name').setAttribute('required', 'true');
+          submitBtn.textContent = "إنشاء الحساب والبدء";
+
+          tabSignup.className = "flex-1 py-2 rounded-xl font-bold bg-cyan-600 text-white transition-all cursor-pointer";
+          tabLogin.className = "flex-1 py-2 rounded-xl text-slate-400 transition-all cursor-pointer";
+        }
+      }
+
+      onboardingForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const wristband = document.getElementById('wristband-id').value.trim();
+        const { doc, getDoc } = window.firebaseModules;
+        const docRef = doc(window.db, "astronauts", wristband);
+        const docSnap = await getDoc(docRef);
+
+        if (authMode === 'login') {
+          if (!docSnap.exists()) {
+            alert("❌ رقم السوار غير مسجل في النظام! يرجى إنشاء حساب جديد أولاً.");
+            return;
+          }
+          proceedToSession(wristband);
+        } else {
+          if (docSnap.exists()) {
+            alert("⚠️ عذراً، رقم السوار هذا مسجل مسبقاً! لا يمكن إنشاء حساب جديد بنفس الرقم.");
+            switchMode('login');
+            return;
+          }
+
+          const name = document.getElementById('astronaut-name').value.trim();
+          const photoInput = document.getElementById('astronaut-photo');
+          let photoUrl = 'https://images.unsplash.com/photo-1541185933-ef5d8ed016c2?w=150&auto=format&fit=crop&q=80';
+
+          if (photoInput.files && photoInput.files[0]) {
+            const reader = new FileReader();
+            reader.onload = async function(uploadEvent) {
+              photoUrl = uploadEvent.target.result;
+              await createNewAstronaut(docRef, name, wristband, photoUrl);
+            };
+            reader.readAsDataURL(photoInput.files[0]);
+          } else {
+            await createNewAstronaut(docRef, name, wristband, photoUrl);
+          }
+        }
+      };
+
+      // بيانات تجريبية للمستشعرات الجديدة. استبدلها بقراءات الأجهزة الفعلية عند ربطها.
+      function getDefaultSpaceData() {
+        return {
+          environment: {
+            radiationRate: 0.12,       // µSv/h - قيمة محاكاة فقط
+            cumulativeDose: 1.8,       // mSv - قيمة محاكاة فقط
+            co2: 900,                  // ppm
+            vocIndex: 85,              // مؤشر جودة/ملوثات نسبي من المستشعر
+            humidity: 45,              // %
+            cabinTemp: 22.5,            // °C
+            cabinPressure: 101.3        // kPa
+          },
+          wellbeing: {
+            isolationDays: 30,
+            sleepHours: 7.5,
+            stressLevel: 3,             // self-report 1..10
+            moodLevel: 8,               // self-report 1..10
+            activityMinutes: 45         // minutes/day
+          }
+        };
+      }
+
+      async function createNewAstronaut(docRef, name, wristband, photoUrl) {
+        const { setDoc } = window.firebaseModules;
+        await setDoc(docRef, {
+          name: name,
+          wristband: wristband,
+          photoUrl: photoUrl,
+          metrics: {
+            heartRate: { label: 'نبض القلب (HR)', unit: 'BPM', minNorm: 60, maxNorm: 100, val: 72 },
+            spo2: { label: 'تشبع الأكسجين (SpO2)', unit: '%', minNorm: 95, maxNorm: 100, val: 98 },
+            bpSys: { label: 'الضغط الانقباضي (BP Sys)', unit: 'mmHg', minNorm: 90, maxNorm: 130, val: 120 },
+            glucose: { label: 'سكر الدم (Glucose)', unit: 'mg/dL', minNorm: 70, maxNorm: 140, val: 100 },
+            bodyTemp: { label: 'حرارة الجسم (Temp)', unit: '°C', minNorm: 36.5, maxNorm: 37.5, val: 37.0 },
+            boneTScore: { label: 'كثافة العظام (Bone T-Score)', unit: 'Score', minNorm: -1.0, maxNorm: 1.5, val: 0.2 }
+          },
+          ...getDefaultSpaceData()
+        });
+
+        alert("✅ تم إنشاء الحساب بنجاح! يرجى تسجيل الدخول برقم السوار الآن.");
+        document.getElementById('onboarding-form').reset();
+        switchMode('login');
+      }
+
+      function proceedToSession(wristband) {
+        currentSession = { wristband };
+        localStorage.setItem('current_session', JSON.stringify(currentSession));
+        showDashboard(wristband);
+      }
+
+      function showDashboard(wristband) {
+        onboardingScreen.classList.add('hidden');
+        dashboardScreen.classList.remove('hidden');
+        document.getElementById('emergency-chat-widget').classList.remove('hidden');
+
+        const { doc, onSnapshot, setDoc, getDoc } = window.firebaseModules;
+        const docRef = doc(window.db, "astronauts", wristband);
+
+        unsubscribeSnapshot = onSnapshot(docRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            latestMetrics = data.metrics;
+            const spaceDefaults = getDefaultSpaceData();
+            latestEnvironment = data.environment || spaceDefaults.environment;
+            latestWellbeing = data.wellbeing || spaceDefaults.wellbeing;
+            astronautName = data.name || "زياد";
+            document.getElementById('db-name').textContent = data.name;
+            document.getElementById('db-wristband').textContent = data.wristband;
+            document.getElementById('db-photo').src = data.photoUrl;
+            renderMetrics(data.metrics);
+            renderSpaceMonitoring(latestEnvironment, latestWellbeing);
+            checkProtocols(data.metrics);
+            checkVitalsAndAlert(data.metrics);
+          }
+        });
+
+        if (!window.simulationInterval) {
+          window.simulationInterval = setInterval(async () => {
+            const snap = await getDoc(docRef);
+            if (snap.exists()) {
+              const astronautData = snap.data();
+              let metrics = astronautData.metrics;
+              const defaults = getDefaultSpaceData();
+              let environment = astronautData.environment || defaults.environment;
+              let wellbeing = astronautData.wellbeing || defaults.wellbeing;
+              simulationCounter++;
+
+              // محاكاة دورية لشرح شكل التنبيهات داخل الواجهة، وليست قراءات أجهزة حقيقية.
+              if (simulationCounter % 3 === 0) {
+                  metrics.spo2.val = 91;
+                  metrics.bodyTemp.val = 38.2;
+                  metrics.heartRate.val = 115;
+                  environment.co2 = 3200;
+                  environment.radiationRate = 0.38;
+                  environment.vocIndex = 165;
+                  environment.humidity = 68;
+                  environment.cabinTemp = 28.5;
+                  wellbeing.sleepHours = 4.5;
+                  wellbeing.stressLevel = 8;
+                  wellbeing.moodLevel = 3;
+                  wellbeing.activityMinutes = 12;
+              } else {
+                  metrics.spo2.val = 98;
+                  metrics.bodyTemp.val = 37.0;
+                  metrics.heartRate.val = 75;
+                  environment.co2 = 900;
+                  environment.radiationRate = 0.12;
+                  environment.vocIndex = 85;
+                  environment.humidity = 45;
+                  environment.cabinTemp = 22.5;
+                  wellbeing.sleepHours = 7.5;
+                  wellbeing.stressLevel = 3;
+                  wellbeing.moodLevel = 8;
+                  wellbeing.activityMinutes = 45;
+              }
+              environment.cumulativeDose = Number((Number(environment.cumulativeDose || 0) + Number(environment.radiationRate) * (5 / 3600) / 1000).toFixed(5));
+
+              await setDoc(docRef, { metrics, environment, wellbeing }, { merge: true });
+            }
+          }, 5000); 
+        }
+      }
+
+      logoutBtn.onclick = () => {
+        if (unsubscribeSnapshot) unsubscribeSnapshot();
+        clearInterval(window.simulationInterval);
+        window.simulationInterval = null;
+        localStorage.removeItem('current_session');
+        location.reload();
+      };
+
+      // حدود توضيحية للمحاكاة فقط؛ يجب استبدالها بحدود معتمدة خاصة بالمركبة والمهمة.
+      const SPACE_SENSOR_LIMITS = {
+        radiationRate: { min: 0, max: 0.30, unit: "µSv/h", label: "معدل الإشعاع" },
+        co2: { min: 0, max: 2500, unit: "ppm", label: "ثاني أكسيد الكربون" },
+        vocIndex: { min: 0, max: 150, unit: "Index", label: "مؤشر ملوثات الهواء" },
+        humidity: { min: 25, max: 60, unit: "%", label: "الرطوبة النسبية" },
+        cabinTemp: { min: 18, max: 27, unit: "°C", label: "حرارة المقصورة" },
+        cabinPressure: { min: 95, max: 105, unit: "kPa", label: "ضغط المقصورة" },
+        sleepHours: { min: 6, max: 10, unit: "ساعة", label: "مدة النوم" },
+        stressLevel: { min: 1, max: 6, unit: "/10", label: "مستوى التوتر المُبلغ عنه" },
+        moodLevel: { min: 5, max: 10, unit: "/10", label: "مؤشر المزاج المُبلغ عنه" },
+        activityMinutes: { min: 30, max: 240, unit: "دقيقة/يوم", label: "النشاط البدني اليومي" }
+      };
+
+      function makeSpaceSensorCard(label, value, unit, min, max, key, note = "") {
+        const numeric = Number(value);
+        const isValid = Number.isFinite(numeric);
+        const out = isValid && (numeric < min || numeric > max);
+        const card = document.createElement("article");
+        card.className = `rounded-2xl border p-4 space-y-2 ${out ? "border-orange-500/40 bg-orange-500/10" : "border-slate-800 bg-slate-950/50"}`;
+        const top = document.createElement("div");
+        top.className = "flex items-start justify-between gap-2";
+        const title = document.createElement("span");
+        title.className = "text-[10px] text-slate-400";
+        title.textContent = label;
+        const status = document.createElement("span");
+        status.className = `text-[9px] rounded-full px-2 py-1 ${out ? "bg-orange-500/15 text-orange-300" : "bg-emerald-500/10 text-emerald-300"}`;
+        status.textContent = out ? "يحتاج مراجعة" : "ضمن النطاق";
+        top.append(title, status);
+        const reading = document.createElement("p");
+        reading.className = `text-xl font-bold font-mono ${out ? "text-orange-300" : "text-white"}`;
+        reading.textContent = `${isValid ? numeric : "—"} ${unit}`;
+        const range = document.createElement("p");
+        range.className = "text-[9px] text-slate-500";
+        range.textContent = `نطاق العرض التجريبي: ${min} – ${max} ${unit}`;
+        card.append(top, reading, range);
+        if (note) {
+          const noteEl = document.createElement("p");
+          noteEl.className = "text-[9px] text-slate-500";
+          noteEl.textContent = note;
+          card.appendChild(noteEl);
+        }
+        card.dataset.sensorKey = key;
+        return { card, out };
+      }
+
+      function renderSpaceMonitoring(environment, wellbeing) {
+        if (!environment || !wellbeing) return;
+        const radiationGrid = document.getElementById("radiation-sensors-grid");
+        const environmentGrid = document.getElementById("environment-sensors-grid");
+        const isolationGrid = document.getElementById("isolation-sensors-grid");
+        if (!radiationGrid || !environmentGrid || !isolationGrid) return;
+        radiationGrid.innerHTML = "";
+        environmentGrid.innerHTML = "";
+        isolationGrid.innerHTML = "";
+
+        const radiation = [
+          ["معدل الإشعاع الحالي", environment.radiationRate, "µSv/h", 0, SPACE_SENSOR_LIMITS.radiationRate.max, "radiationRate"],
+          ["الجرعة التراكمية للمهمة", environment.cumulativeDose, "mSv", 0, 100, "cumulativeDose", "تُعرض كقيمة تراكمية تجريبية؛ حد المهمة يحدده مسؤول الحماية الإشعاعية." ]
+        ];
+        radiation.forEach(item => {
+          const max = item[5] === "cumulativeDose" ? item[4] : item[4];
+          const result = makeSpaceSensorCard(item[0], item[1], item[2], item[3], max, item[5], item[6] || "");
+          radiationGrid.appendChild(result.card);
+        });
+
+        const envSensors = [
+          ["ثاني أكسيد الكربون CO₂", environment.co2, "ppm", 350, SPACE_SENSOR_LIMITS.co2.max, "co2"],
+          ["مؤشر ملوثات الهواء VOC", environment.vocIndex, "Index", 0, SPACE_SENSOR_LIMITS.vocIndex.max, "vocIndex"],
+          ["الرطوبة النسبية", environment.humidity, "%", SPACE_SENSOR_LIMITS.humidity.min, SPACE_SENSOR_LIMITS.humidity.max, "humidity"],
+          ["حرارة المقصورة", environment.cabinTemp, "°C", SPACE_SENSOR_LIMITS.cabinTemp.min, SPACE_SENSOR_LIMITS.cabinTemp.max, "cabinTemp"],
+          ["ضغط المقصورة", environment.cabinPressure, "kPa", SPACE_SENSOR_LIMITS.cabinPressure.min, SPACE_SENSOR_LIMITS.cabinPressure.max, "cabinPressure"]
+        ];
+        envSensors.forEach(item => environmentGrid.appendChild(makeSpaceSensorCard(...item).card));
+
+        const isolationSensors = [
+          ["مدة العزلة", wellbeing.isolationDays, "يوم", 0, 3650, "isolationDays", "مدة المهمة/العزلة المسجلة وليست إنذاراً طبياً بحد ذاتها."],
+          ["جودة النوم - عدد الساعات", wellbeing.sleepHours, "ساعة", SPACE_SENSOR_LIMITS.sleepHours.min, SPACE_SENSOR_LIMITS.sleepHours.max, "sleepHours"],
+          ["مستوى التوتر المُبلغ عنه", wellbeing.stressLevel, "/10", SPACE_SENSOR_LIMITS.stressLevel.min, SPACE_SENSOR_LIMITS.stressLevel.max, "stressLevel", "إدخال ذاتي يومي: 1 منخفض، 10 مرتفع."],
+          ["المزاج المُبلغ عنه", wellbeing.moodLevel, "/10", SPACE_SENSOR_LIMITS.moodLevel.min, SPACE_SENSOR_LIMITS.moodLevel.max, "moodLevel", "إدخال ذاتي يومي: 1 منخفض، 10 مرتفع."],
+          ["النشاط البدني اليومي", wellbeing.activityMinutes, "دقيقة", SPACE_SENSOR_LIMITS.activityMinutes.min, SPACE_SENSOR_LIMITS.activityMinutes.max, "activityMinutes"]
+        ];
+        isolationSensors.forEach(item => isolationGrid.appendChild(makeSpaceSensorCard(...item).card));
+        renderEnvironmentImpactReport(environment, wellbeing);
+      }
+
+      function renderEnvironmentImpactReport(environment, wellbeing) {
+        const report = document.getElementById("environment-impact-report");
+        const list = document.getElementById("environment-impact-list");
+        const summary = document.getElementById("environment-impact-summary");
+        const count = document.getElementById("environment-impact-count");
+        const status = document.getElementById("environment-global-status");
+        if (!report || !list || !environment || !wellbeing) return;
+        const alerts = [];
+        const addIf = (condition, title, reading, impact, action) => { if (condition) alerts.push({ title, reading, impact, action }); };
+        addIf(Number(environment.radiationRate) > SPACE_SENSOR_LIMITS.radiationRate.max,
+          "ارتفاع معدل الإشعاع", `${environment.radiationRate} µSv/h`,
+          "قد يزيد التعرض الإشعاعي مع استمرار المعدل ومدة التعرض؛ لا يمكن استنتاج الخطر الفردي من قراءة منفردة.",
+          "تحقق من معايرة مقياس الجرعة وموقعه، وراجع سجل الجرعة التراكمية مع مسؤول الحماية الإشعاعية واتبع حدود المهمة المعتمدة.");
+        addIf(Number(environment.co2) > SPACE_SENSOR_LIMITS.co2.max,
+          "ارتفاع ثاني أكسيد الكربون", `${environment.co2} ppm`,
+          "قد تشير القراءة إلى قصور في إزالة CO₂ أو التهوية، وقد ترتبط بصداع أو خمول عند التعرض المرتفع.",
+          "تحقق من مستشعر CO₂ ونظام إزالة ثاني أكسيد الكربون وتدفق الهواء، وأبلغ مسؤول أنظمة دعم الحياة فوراً.");
+        addIf(Number(environment.vocIndex) > SPACE_SENSOR_LIMITS.vocIndex.max,
+          "ارتفاع مؤشر ملوثات الهواء", `${environment.vocIndex} Index`,
+          "قد يدل المؤشر النسبي على زيادة مركبات عضوية متطايرة أو ملوثات؛ يلزم تحديد نوع المادة بمستشعر مناسب.",
+          "تحقق من مصدر التلوث وقراءة الجهاز، واتبع إجراءات جودة الهواء المعتمدة ولا تعتمد على المؤشر وحده لتحديد المادة.");
+        addIf(Number(environment.humidity) < SPACE_SENSOR_LIMITS.humidity.min || Number(environment.humidity) > SPACE_SENSOR_LIMITS.humidity.max,
+          "الرطوبة خارج نطاق العرض", `${environment.humidity}%`,
+          "الرطوبة غير المناسبة قد تؤثر في الراحة وتكاثف الرطوبة وبعض مكونات المقصورة.",
+          "راجع نظام التحكم بالرطوبة والتكاثف، وتأكد من سلامة المستشعر.");
+        addIf(Number(environment.cabinTemp) < SPACE_SENSOR_LIMITS.cabinTemp.min || Number(environment.cabinTemp) > SPACE_SENSOR_LIMITS.cabinTemp.max,
+          "حرارة المقصورة خارج النطاق", `${environment.cabinTemp} °C`,
+          "قد تؤثر حرارة المقصورة غير المناسبة في الراحة والأداء الحراري للرائد.",
+          "تحقق من مستشعر الحرارة ونظام التحكم الحراري واتبع إجراءات تشغيل المقصورة.");
+        addIf(Number(environment.cabinPressure) < SPACE_SENSOR_LIMITS.cabinPressure.min || Number(environment.cabinPressure) > SPACE_SENSOR_LIMITS.cabinPressure.max,
+          "ضغط المقصورة خارج نطاق العرض", `${environment.cabinPressure} kPa`,
+          "تغير ضغط المقصورة يحتاج تحققاً فورياً من أنظمة الضغط وأجهزة القياس.",
+          "اتبع إجراء فحص الضغط والطوارئ الخاص بالمركبة، وأبلغ مسؤول أنظمة دعم الحياة فوراً.");
+        addIf(Number(wellbeing.sleepHours) < SPACE_SENSOR_LIMITS.sleepHours.min,
+          "انخفاض مدة النوم", `${wellbeing.sleepHours} ساعة`,
+          "قلة النوم المتكررة قد تؤثر في الانتباه والمزاج والأداء المعرفي.",
+          "راجع جدول النوم والإضاءة والضوضاء وجدول العمل، وسجل الحالة ضمن المتابعة اليومية للفريق الطبي.");
+        addIf(Number(wellbeing.stressLevel) > SPACE_SENSOR_LIMITS.stressLevel.max,
+          "ارتفاع التوتر المُبلغ عنه", `${wellbeing.stressLevel}/10`,
+          "قد يشير التقييم الذاتي إلى ضغط نفسي يحتاج متابعة، ولا يمثل تشخيصاً.",
+          "شجع الرائد على التواصل مع فريق الدعم النفسي، واستخدام فترات الراحة والتواصل المنتظم مع الطاقم والأرض.");
+        addIf(Number(wellbeing.moodLevel) < SPACE_SENSOR_LIMITS.moodLevel.min,
+          "انخفاض تقييم المزاج", `${wellbeing.moodLevel}/10`,
+          "انخفاض التقييم الذاتي قد يرتبط بالإجهاد أو العزلة أو عوامل أخرى ويحتاج متابعة سياقية.",
+          "سجل التغير واستفسر عن النوم والضغط والتواصل الاجتماعي، وصعّد لفريق الدعم النفسي عند استمرار التراجع.");
+        addIf(Number(wellbeing.activityMinutes) < SPACE_SENSOR_LIMITS.activityMinutes.min,
+          "انخفاض النشاط البدني", `${wellbeing.activityMinutes} دقيقة/يوم`,
+          "قلة الحركة قد تقلل اللياقة مع الوقت، بينما تتطلب التمارين الفضائية برنامجاً مناسباً للمهمة.",
+          "راجع خطة التمرين المعتمدة مع مسؤول اللياقة/الطب الفضائي ولا تبدأ برنامجاً جديداً دون موافقة الفريق.");
+
+        list.innerHTML = "";
+        if (!alerts.length) {
+          report.classList.add("hidden");
+          status.textContent = "البيئة والمؤشرات مستقرة";
+          status.className = "text-[10px] font-bold rounded-full px-3 py-2 bg-emerald-500/10 text-emerald-300 border border-emerald-500/20";
+          return;
+        }
+        report.classList.remove("hidden");
+        summary.textContent = "تم رصد عوامل بيئية أو مؤشرات رفاه خارج نطاق العرض التجريبي؛ راجع التفاصيل والإجراءات أدناه.";
+        count.textContent = `${alerts.length} تنبيه/تنبيهات`;
+        status.textContent = "توجد عوامل تحتاج مراجعة";
+        status.className = "text-[10px] font-bold rounded-full px-3 py-2 bg-orange-500/10 text-orange-300 border border-orange-500/30 animate-pulse";
+        alerts.forEach(alert => {
+          const card = document.createElement("article");
+          card.className = "rounded-2xl border border-orange-500/30 bg-orange-500/10 p-4 space-y-2";
+          const title = document.createElement("h4");
+          title.className = "text-sm font-bold text-orange-200";
+          title.textContent = `⚠️ ${alert.title}`;
+          const reading = document.createElement("p");
+          reading.className = "text-xs font-mono text-orange-100";
+          reading.textContent = `القراءة: ${alert.reading}`;
+          const impact = document.createElement("p");
+          impact.className = "text-xs leading-relaxed text-slate-300";
+          impact.textContent = alert.impact;
+          const action = document.createElement("p");
+          action.className = "text-xs leading-relaxed text-cyan-200 border-t border-slate-700 pt-2";
+          action.textContent = `الإجراء المقترح: ${alert.action}`;
+          card.append(title, reading, impact, action);
+          list.appendChild(card);
+        });
+      }
+
+      function renderMetrics(metrics) {
+        renderLiveWarningReport(metrics);
+        const grid = document.getElementById('metrics-grid');
+        grid.innerHTML = Object.keys(metrics).map(key => {
+          const m = metrics[key];
+          const isCritical = m.val < m.minNorm || m.val > m.maxNorm;
+          const statusText = isCritical ? 'غير طبيعي (Alert)' : 'طبيعي (Nominal)';
+          const statusClass = isCritical ? 'text-red-400 bg-red-500/15 border-red-500/40 animate-pulse' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+
+          return `
+            <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-800/80 space-y-3">
+              <div class="flex justify-between items-start">
+                <div>
+                  <span class="text-[10px] text-slate-400 block">${m.label}</span>
+                  <span class="text-lg font-bold font-mono text-white mt-0.5 block">${m.val} <span class="text-xs text-slate-500 font-normal">${m.unit}</span></span>
+                </div>
+                <span class="text-[10px] font-mono px-2.5 py-1 rounded-full border ${statusClass}">${statusText}</span>
+              </div>
+              <div class="text-[10px] text-slate-500 flex justify-between font-mono pt-2 border-t border-slate-800">
+                <span>النطاق الآمن:</span>
+                <span>${m.minNorm} - ${m.maxNorm} ${m.unit}</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // إنشاء تقرير فوري لكل مؤشر خرج عن النطاق المحدد له.
+      // الإرشادات هنا عامة وآمنة، ولا تستبدل تقييم الفريق الطبي.
+      function renderLiveWarningReport(metrics) {
+        const report = document.getElementById("live-warning-report");
+        const list = document.getElementById("warning-report-list");
+        const summary = document.getElementById("warning-report-summary");
+        const count = document.getElementById("warning-report-count");
+        if (!report || !list || !metrics) return;
+
+        const guidance = {
+          heartRate: {
+            name: "نبض القلب",
+            low: "معدل النبض أقل من الحد المسجل في النظام.",
+            high: "معدل النبض أعلى من الحد المسجل في النظام.",
+            action: "أوقف المجهود مؤقتاً، واجلس أو استرح في وضع آمن، ثم أبلغ المسؤول الطبي فوراً لإعادة التقييم."
+          },
+          spo2: {
+            name: "تشبع الأكسجين",
+            low: "تشبع الأكسجين أقل من الحد المسجل في النظام.",
+            high: "قراءة تشبع الأكسجين أعلى من الحد المسجل؛ تحقق من دقة القياس وطريقة تثبيت المستشعر.",
+            action: "أبلغ المسؤول الطبي فوراً، وتحقق من تثبيت مستشعر الأكسجين وصحة القراءة. إذا وُجد ضيق تنفس أو تدهور، اتبع بروتوكول الطوارئ فوراً."
+          },
+          bpSys: {
+            name: "ضغط الدم الانقباضي",
+            low: "ضغط الدم الانقباضي أقل من الحد المسجل في النظام.",
+            high: "ضغط الدم الانقباضي أعلى من الحد المسجل في النظام.",
+            action: "أوقف النشاط مؤقتاً، وأعد القياس بالطريقة المعتمدة بعد التأكد من وضعية الجسم والجهاز، وأبلغ المسؤول الطبي."
+          },
+          glucose: {
+            name: "سكر الدم",
+            low: "قراءة سكر الدم أقل من الحد المسجل في النظام.",
+            high: "قراءة سكر الدم أعلى من الحد المسجل في النظام.",
+            action: "تحقق من صحة القياس وأبلغ المسؤول الطبي فوراً لاتخاذ الإجراء وفق البروتوكول المعتمد. لا تتناول علاجاً أو تغير جرعة من نفسك."
+          },
+          bodyTemp: {
+            name: "حرارة الجسم",
+            low: "حرارة الجسم أقل من الحد المسجل في النظام.",
+            high: "حرارة الجسم أعلى من الحد المسجل في النظام.",
+            action: "أوقف المجهود، وابتعد عن مصدر الحرارة أو البرودة إن وجد، وأبلغ المسؤول الطبي لإعادة التقييم."
+          },
+          boneTScore: {
+            name: "كثافة العظام",
+            low: "قيمة مؤشر كثافة العظام أقل من الحد المسجل في النظام.",
+            high: "قيمة مؤشر كثافة العظام أعلى من الحد المسجل في النظام؛ تحقق من صحة البيانات والوحدة.",
+            action: "أبلغ الفريق الطبي واطلب مراجعة القراءة والسجل السابق. هذا المؤشر يحتاج إلى تقييم متخصص ولا يُعالج بإجراء فوري ذاتي."
+          }
+        };
+
+        const alerts = Object.entries(metrics).filter(([key, metric]) => {
+          if (!metric || metric.val === null || metric.val === undefined) return false;
+          const value = Number(metric.val);
+          const min = Number(metric.minNorm);
+          const max = Number(metric.maxNorm);
+          return Number.isFinite(value) && Number.isFinite(min) && Number.isFinite(max)
+            && (value < min || value > max);
+        });
+
+        list.innerHTML = "";
+
+        if (!alerts.length) {
+          report.classList.add("hidden");
+          return;
+        }
+
+        report.classList.remove("hidden");
+        summary.textContent = "تم رصد قراءات خارج النطاق الآمن المسجل. راجع كل تنبيه أدناه.";
+        count.textContent = `${alerts.length} مؤشر يحتاج إلى مراجعة`;
+
+        alerts.forEach(([key, metric]) => {
+          const info = guidance[key] || {
+            name: metric.label || key,
+            low: "القراءة أقل من الحد المسجل في النظام.",
+            high: "القراءة أعلى من الحد المسجل في النظام.",
+            action: "أوقف النشاط غير الضروري وأبلغ المسؤول الطبي لمراجعة القراءة."
+          };
+
+          const value = Number(metric.val);
+          const min = Number(metric.minNorm);
+          const max = Number(metric.maxNorm);
+          const isLow = value < min;
+
+          const card = document.createElement("article");
+          card.className = "rounded-2xl border border-red-500/30 bg-red-500/10 p-4 space-y-3";
+
+          const top = document.createElement("div");
+          top.className = "flex items-start justify-between gap-3";
+
+          const headingWrap = document.createElement("div");
+          const heading = document.createElement("h4");
+          heading.className = "text-sm font-bold text-red-300";
+          heading.textContent = `⚠️ ${info.name}`;
+          const issue = document.createElement("p");
+          issue.className = "text-xs text-slate-300 mt-1 leading-relaxed";
+          issue.textContent = isLow ? info.low : info.high;
+          headingWrap.append(heading, issue);
+
+          const status = document.createElement("span");
+          status.className = "shrink-0 text-[10px] font-bold text-red-200 bg-red-500/20 border border-red-400/30 rounded-lg px-2 py-1";
+          status.textContent = "خارج النطاق";
+          top.append(headingWrap, status);
+
+          const reading = document.createElement("div");
+          reading.className = "grid grid-cols-2 gap-2";
+          const current = document.createElement("div");
+          current.className = "bg-slate-950/60 rounded-xl p-3";
+          current.innerHTML = '<span class="block text-[10px] text-slate-400">القراءة الحالية</span>';
+          const currentValue = document.createElement("strong");
+          currentValue.className = "block text-lg font-mono text-red-300 mt-1";
+          currentValue.textContent = `${metric.val} ${metric.unit || ""}`;
+          current.appendChild(currentValue);
+
+          const range = document.createElement("div");
+          range.className = "bg-slate-950/60 rounded-xl p-3";
+          range.innerHTML = '<span class="block text-[10px] text-slate-400">النطاق المسجل</span>';
+          const rangeValue = document.createElement("strong");
+          rangeValue.className = "block text-sm font-mono text-white mt-2";
+          rangeValue.textContent = `${metric.minNorm} – ${metric.maxNorm} ${metric.unit || ""}`;
+          range.appendChild(rangeValue);
+          reading.append(current, range);
+
+          const action = document.createElement("div");
+          action.className = "rounded-xl bg-slate-950/70 border border-orange-400/20 p-3";
+          const actionTitle = document.createElement("p");
+          actionTitle.className = "text-[10px] font-bold text-orange-300 mb-1";
+          actionTitle.textContent = "الإجراء المقترح الآن";
+          const actionText = document.createElement("p");
+          actionText.className = "text-xs leading-relaxed text-slate-200";
+          actionText.textContent = info.action;
+          action.append(actionTitle, actionText);
+
+          card.append(top, reading, action);
+          list.appendChild(card);
+        });
+      }
+
+      // تحميل قاعدة المعرفة من ملف JSON بجانب ملف HTML
+      async function loadMedicalKnowledge() {
+        try {
+          const response = await fetch("./medical-knowledge.json", { cache: "no-store" });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          medicalKnowledge = await response.json();
+          renderQuickQuestions();
+
+          // قد تصل بيانات Firebase قبل اكتمال تحميل ملف JSON
+          if (latestMetrics) {
+            checkVitalsAndAlert({
+              spo2: latestMetrics.spo2?.val,
+              temp: latestMetrics.bodyTemp?.val,
+              heartRate: latestMetrics.heartRate?.val,
+              bpSys: latestMetrics.bpSys?.val,
+              glucose: latestMetrics.glucose?.val,
+              boneTScore: latestMetrics.boneTScore?.val
+            });
+          }
+        } catch (error) {
+          console.error("تعذر تحميل medical-knowledge.json:", error);
+          const suggestions = document.getElementById("chat-suggestions");
+          if (suggestions) {
+            suggestions.innerHTML = '<p class="text-red-300 text-[10px]">تعذر تحميل ملف medical-knowledge.json. تأكد من وجوده بجانب index.html وتشغيل المشروع عبر Live Server.</p>';
+          }
+        }
+      }
+
+      function getCurrentAlertIds(metrics) {
+        if (!medicalKnowledge || !metrics) return [];
+        const alerts = medicalKnowledge.alerts || {};
+        const result = [];
+
+        Object.entries(alerts).forEach(([id, alert]) => {
+          const value = Number(metrics[alert.metric]);
+          if (Number.isFinite(value) && testAlertCondition(value, alert.condition, Number(alert.threshold))) {
+            result.push(id);
+          }
+        });
+
+        return result;
+      }
+
+      function testAlertCondition(value, condition, threshold) {
+        switch (condition) {
+          case "lt": return value < threshold;
+          case "lte": return value <= threshold;
+          case "gt": return value > threshold;
+          case "gte": return value >= threshold;
+          default: return false;
+        }
+      }
+
+      function checkVitalsAndAlert(currentVitals) {
+        if (!currentVitals) return;
+
+        const normalizedVitals = {
+          spo2: Number(currentVitals.spo2?.val ?? currentVitals.spo2),
+          temp: Number(currentVitals.temp?.val ?? currentVitals.temp ?? currentVitals.bodyTemp?.val ?? currentVitals.bodyTemp),
+          heartRate: Number(currentVitals.heartRate?.val ?? currentVitals.heartRate),
+          bpSys: Number(currentVitals.bpSys?.val ?? currentVitals.bpSys),
+          glucose: Number(currentVitals.glucose?.val ?? currentVitals.glucose),
+          boneTScore: Number(currentVitals.boneTScore?.val ?? currentVitals.boneTScore)
+        };
+
+        if (!medicalKnowledge) return;
+
+        activeAlertIds = getCurrentAlertIds(normalizedVitals);
+
+        const badge = document.getElementById("chat-badge");
+        if (badge) {
+          if (activeAlertIds.length) {
+            badge.textContent = String(activeAlertIds.length);
+            badge.classList.remove("hidden");
+          } else {
+            badge.classList.add("hidden");
+          }
+        }
+
+        renderChatSuggestions();
+        updateProtocolPanel();
+
+        const signature = activeAlertIds.slice().sort().join("|");
+        if (signature !== lastAlertSignature && activeAlertIds.length) {
+          const newAlerts = activeAlertIds.filter(id => !lastAlertSignature.split("|").includes(id));
+          newAlerts.forEach(id => {
+            const alert = medicalKnowledge.alerts[id];
+            if (alert) addChatMessage("تنبيه جديد: " + alert.title, alert.message, "alert");
+          });
+        }
+        lastAlertSignature = signature;
+      }
+
+      function renderChatSuggestions() {
+        const container = document.getElementById("chat-suggestions");
+        if (!container || !medicalKnowledge) return;
+
+        let suggestions = [];
+        let heading = "";
+
+        if (activeAlertIds.length) {
+          heading = "تنبيهات المؤشرات الحالية";
+          activeAlertIds.forEach(alertId => {
+            const alert = medicalKnowledge.alerts[alertId];
+            (alert?.suggestions || []).forEach(item => {
+              suggestions.push({ ...item, alertTitle: alert.title });
+            });
+          });
+        } else {
+          heading = medicalKnowledge.normal?.title || "الحالة مستقرة";
+          suggestions = medicalKnowledge.normal?.suggestions || [];
+        }
+
+        container.innerHTML = "";
+        const headingElement = document.createElement("p");
+        headingElement.className = "w-full text-[10px] text-cyan-300 mb-1";
+        headingElement.textContent = heading;
+        container.appendChild(headingElement);
+
+        suggestions.forEach(item => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.dataset.suggestionId = item.id;
+          button.className = "text-[10px] text-white bg-slate-800 hover:bg-cyan-700 border border-slate-700 rounded-lg px-2.5 py-2 transition-colors";
+          button.textContent = item.label;
+          container.appendChild(button);
+        });
+
+        if (!suggestions.length) {
+          const empty = document.createElement("span");
+          empty.className = "text-[10px] text-slate-500";
+          empty.textContent = "لا توجد اقتراحات إضافية حالياً.";
+          container.appendChild(empty);
+        }
+      }
+
+      function renderQuickQuestions() {
+        const container = document.getElementById("chat-quick-questions");
+        if (!container || !medicalKnowledge) return;
+
+        container.innerHTML = "";
+        (medicalKnowledge.quick_questions || []).forEach(item => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.dataset.questionId = item.id;
+          button.className = "text-[10px] text-cyan-200 bg-cyan-950/50 hover:bg-cyan-900 border border-cyan-900 rounded-lg px-2.5 py-2";
+          button.textContent = item.question;
+          container.appendChild(button);
+        });
+      }
+
+      function findJsonAnswer(question) {
+        if (!medicalKnowledge) return null;
+        const normalized = question.toLowerCase().trim();
+        const questions = medicalKnowledge.quick_questions || [];
+
+        return questions.find(item =>
+          (item.keywords || []).some(keyword =>
+            normalized.includes(String(keyword).toLowerCase())
+          )
+        ) || null;
+      }
+
+      function findSuggestionById(id) {
+        if (!medicalKnowledge) return null;
+        for (const alert of Object.values(medicalKnowledge.alerts || {})) {
+          const match = (alert.suggestions || []).find(item => item.id === id);
+          if (match) return match;
+        }
+        return (medicalKnowledge.normal?.suggestions || []).find(item => item.id === id) || null;
+      }
+
+      function addChatMessage(titleText, messageText, type = "assistant") {
+        const body = document.getElementById("chat-messages-body");
+        if (!body) return;
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "p-3 rounded-2xl rounded-tr-none border text-xs space-y-1 " +
+          (type === "alert"
+            ? "bg-red-500/10 border-red-500/30 text-red-200"
+            : "bg-slate-800/80 border-slate-700 text-slate-200");
+
+        const title = document.createElement("p");
+        title.className = "font-bold " + (type === "alert" ? "text-red-300" : "text-cyan-400");
+        title.textContent = titleText;
+
+        const message = document.createElement("p");
+        message.className = "leading-relaxed whitespace-pre-wrap";
+        message.textContent = messageText;
+
+        wrapper.append(title, message);
+        body.appendChild(wrapper);
+        body.scrollTop = body.scrollHeight;
+      }
+
+      function updateProtocolPanel() {
+        const container = document.getElementById("protocol-content");
+        const globalStatus = document.getElementById("db-global-status");
+        if (!container || !globalStatus || !medicalKnowledge) return;
+
+        if (activeAlertIds.length) {
+          globalStatus.textContent = "ALERT DETECTED (يوجد تنبيه)";
+          globalStatus.className = "text-xs font-mono font-bold text-red-400 animate-pulse";
+          container.innerHTML = "";
+
+          activeAlertIds.forEach(id => {
+            const alert = medicalKnowledge.alerts[id];
+            if (!alert) return;
+
+            const card = document.createElement("div");
+            card.className = "p-3 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-300 space-y-1";
+            const title = document.createElement("span");
+            title.className = "font-bold block";
+            title.textContent = "⚠️ " + alert.title;
+            const message = document.createElement("p");
+            message.className = "text-[11px] text-slate-300";
+            message.textContent = alert.message;
+            card.append(title, message);
+            container.appendChild(card);
+          });
+        } else {
+          globalStatus.textContent = "NOMINAL (طبيعي)";
+          globalStatus.className = "text-xs font-mono font-bold text-emerald-400";
+          container.innerHTML = "";
+          const card = document.createElement("div");
+          card.className = "p-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-400";
+          card.textContent = medicalKnowledge.normal?.message || "المؤشرات ضمن النطاق المحدد.";
+          container.appendChild(card);
+        }
+      }
+
+      document.addEventListener("click", event => {
+        const suggestionButton = event.target.closest("[data-suggestion-id]");
+        if (suggestionButton) {
+          const item = findSuggestionById(suggestionButton.dataset.suggestionId);
+          if (item) addChatMessage(item.label, item.details || item.message || "لا توجد تفاصيل إضافية لهذا الاقتراح.");
+          return;
+        }
+
+        const questionButton = event.target.closest("[data-question-id]");
+        if (questionButton && medicalKnowledge) {
+          const item = (medicalKnowledge.quick_questions || []).find(q => q.id === questionButton.dataset.questionId);
+          if (item) addChatMessage(item.question, item.answer);
+        }
+      });
+
+      window.handleKeyPress = function(event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          sendAstronautMessage();
+        }
+      };
+
+      window.sendAstronautMessage = function() {
+        const input = document.getElementById("astronaut-chat-input");
+        if (!input) return;
+        const question = input.value.trim();
+        if (!question) return;
+
+        addChatMessage("أنت", question, "user");
+        input.value = "";
+
+        const answer = findJsonAnswer(question);
+        if (answer) {
+          addChatMessage("المساعد الإرشادي الصحي", answer.answer);
+        } else {
+          const fallback = medicalKnowledge?.fallback;
+          addChatMessage(
+            fallback?.title || "المساعد الإرشادي الصحي",
+            fallback?.message || "لا توجد إجابة محفوظة لهذا السؤال في ملف قاعدة المعرفة. يمكنك اختيار أحد الأسئلة السريعة."
+          );
+        }
+      };
+
+      // ================= الربط الفعلي بمحرك Google Gemini AI الحقيقي =================
+
+
+window.handleKeyPress = function(e) {
+    if (e.key === "Enter") {
+        e.preventDefault();
+        sendAstronautMessage();
+    }
+};
+
+window.sendAstronautMessage = async function() {
+    const input = document.getElementById("astronaut-chat-input");
+    const body = document.getElementById("chat-messages-body");
+
+    const text = input.value.trim();
+
+    if (!text || window.geminiLoading) return;
+
+    window.geminiLoading = true;
+
+    // عرض رسالة المستخدم
+    const userWrapper = document.createElement("div");
+    userWrapper.className = "flex justify-end";
+
+    const userMessage = document.createElement("div");
+    userMessage.className =
+        "p-3 bg-cyan-600 text-white rounded-2xl rounded-tl-none max-w-[85%] text-xs shadow-md";
+
+    userMessage.textContent = text;
+
+    userWrapper.appendChild(userMessage);
+    body.appendChild(userWrapper);
+
+    input.value = "";
+    body.scrollTop = body.scrollHeight;
+
+    // عرض مؤشر الكتابة
+    const typingId = "typing-" + Date.now();
+
+    const typing = document.createElement("div");
+    typing.id = typingId;
+    typing.className =
+        "flex items-center gap-1.5 p-3 bg-slate-800/80 rounded-2xl rounded-tr-none text-xs text-cyan-400 w-fit";
+
+    typing.innerHTML = `
+        <span class="w-2 h-2 bg-cyan-400 rounded-full animate-bounce"></span>
+        <span class="w-2 h-2 bg-cyan-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+        <span class="w-2 h-2 bg-cyan-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+    `;
+
+    body.appendChild(typing);
+    body.scrollTop = body.scrollHeight;
+
+    try {
+        await callGeminiRealAI(text, body, typingId);
+    } catch (error) {
+        console.error("Gemini Error:", error);
+
+        const typingElement = document.getElementById(typingId);
+        if (typingElement) typingElement.remove();
+
+        const errorMessage = document.createElement("div");
+        errorMessage.className =
+            "p-3 bg-red-500/10 border border-red-500/30 text-red-300 rounded-2xl text-xs max-w-[85%]";
+
+        errorMessage.textContent =
+            "تعذر الاتصال بالمساعد الذكي حاليًا. حاول مرة أخرى بعد قليل.";
+
+        body.appendChild(errorMessage);
+        body.scrollTop = body.scrollHeight;
+
+    } finally {
+        window.geminiLoading = false;
+    }
+};  
+
+
+
+
+
+
+
+
+
+
+// انتظار قبل إعادة المحاولة
+function waitForGemini(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function callGeminiRealAI(userPrompt, chatBody, typingId) {
+
+    const healthContext = latestMetrics
+        ? `المؤشرات الحيوية الحالية لرائد الفضاء (${astronautName}):
+           نبض القلب=${latestMetrics.heartRate.val} BPM،
+           الأكسجين=${latestMetrics.spo2.val}%،
+           حرارة الجسم=${latestMetrics.bodyTemp.val}°C.`
+        : "المؤشرات الحيوية غير متوفرة حالياً.";
+
+    const spaceContext = (latestEnvironment && latestWellbeing)
+        ? `بيانات البيئة والعزلة الحالية (قراءات محاكاة/أجهزة حسب مصدر البيانات): CO2=${latestEnvironment.co2} ppm، معدل الإشعاع=${latestEnvironment.radiationRate} µSv/h، الجرعة التراكمية=${latestEnvironment.cumulativeDose} mSv، الرطوبة=${latestEnvironment.humidity}%، حرارة المقصورة=${latestEnvironment.cabinTemp}°C، ضغط المقصورة=${latestEnvironment.cabinPressure} kPa، النوم=${latestWellbeing.sleepHours} ساعة، التوتر المُبلغ عنه=${latestWellbeing.stressLevel}/10، المزاج المُبلغ عنه=${latestWellbeing.moodLevel}/10، النشاط=${latestWellbeing.activityMinutes} دقيقة/يوم.`
+        : "بيانات البيئة والعزلة غير متوفرة حالياً.";
+
+    const systemInstruction = `
+        أنت مساعد ذكاء اصطناعي متكامل لرائد الفضاء ${astronautName}.
+
+        ${healthContext}
+        ${spaceContext}
+
+        أجب باللغة العربية وبأسلوب احترافي وواضح.
+        يمكنك الإجابة عن البرمجة والفضاء والموضوعات العامة.
+        عند الأسئلة الطبية قدم معلومات عامة فقط.
+        لا تعتبر المؤشرات المحاكاة أو بيانات الرفاه تشخيصاً طبياً أو نفسياً.
+        وضّح أن حدود البيئة في الواجهة تجريبية ما لم يذكر المستخدم أنها معتمدة للمهمة.
+        لا توصي بأدوية أو جرعات علاجية.
+    `;
+
+    const MODEL = "gemini-3.8-flash";
+    const MAX_RETRIES = 3;
+
+    let lastError = null;
+    let aiReply = "";
+
+    try {
+
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+
+            try {
+
+                console.log(
+                    `Gemini attempt ${attempt} of ${MAX_RETRIES}`
+                );
+
+                const response = await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
+                    {
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type": "application/json",
+                            "x-goog-api-key": GEMINI_API_KEY
+                        },
+
+                        body: JSON.stringify({
+
+                            systemInstruction: {
+                                parts: [
+                                    { text: systemInstruction }
+                                ]
+                            },
+
+                            contents: [
+                                {
+                                    role: "user",
+                                    parts: [
+                                        { text: userPrompt }
+                                    ]
+                                }
+                            ],
+
+                            generationConfig: {
+                                temperature: 0.7,
+                                maxOutputTokens: 2048
+                            }
+                        })
+                    }
+                );
+
+                const data = await response.json();
+
+                if (!response.ok) {
+
+                    const error = new Error(
+                        data.error?.message ||
+                        `HTTP Error: ${response.status}`
+                    );
+
+                    error.status = response.status;
+
+                    throw error;
+                }
+
+                aiReply = data.candidates?.[0]?.content?.parts
+                    ?.map(part => part.text || "")
+                    .join("");
+
+                if (!aiReply) {
+                    throw new Error(
+                        "لم يصل رد نصي من Gemini AI."
+                    );
+                }
+
+                // نجاح الاتصال
+                lastError = null;
+                break;
+
+            } catch (error) {
+
+                lastError = error;
+
+                console.error(
+                    `Gemini attempt ${attempt} failed:`,
+                    error
+                );
+
+                // إعادة المحاولة للأخطاء المؤقتة فقط
+                const retryableStatuses = [
+                    429, 500, 502, 503, 504
+                ];
+
+                const shouldRetry =
+                    retryableStatuses.includes(error.status) ||
+                    !error.status;
+
+                if (!shouldRetry || attempt === MAX_RETRIES) {
+                    break;
+                }
+
+                // انتظار متزايد: 2 ثم 4 ثم 8 ثوانٍ
+                const delay = 2000 * Math.pow(2, attempt - 1);
+
+                console.log(
+                    `Retrying Gemini in ${delay / 1000} seconds...`
+                );
+
+                await waitForGemini(delay);
+            }
+        }
+
+        if (lastError) {
+            throw lastError;
+        }
+
+        // إزالة مؤشر الكتابة
+        document.getElementById(typingId)?.remove();
+
+        // إنشاء رسالة الرد
+        const message = document.createElement("div");
+
+        message.className =
+            "p-3 bg-slate-800 rounded-2xl rounded-tr-none border border-slate-700 text-xs text-slate-200 space-y-1.5 shadow-lg";
+
+        const title = document.createElement("p");
+
+        title.className = "text-cyan-400 font-bold";
+        title.textContent = "🤖 المساعد الصحي:";
+
+        const reply = document.createElement("div");
+
+        reply.className = "leading-relaxed whitespace-pre-wrap";
+        reply.textContent = aiReply;
+
+        message.appendChild(title);
+        message.appendChild(reply);
+
+        chatBody.appendChild(message);
+        chatBody.scrollTop = chatBody.scrollHeight;
+
+    } catch (error) {
+
+        console.error("Gemini Final Error:", error);
+
+        document.getElementById(typingId)?.remove();
+
+        const errorMessage = document.createElement("div");
+
+        errorMessage.className =
+            "p-3 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-300 text-xs";
+
+        if ([429, 503, 500, 502, 504].includes(error.status)) {
+
+            errorMessage.textContent =
+                "⚠️ المساعد الذكي مشغول حاليًا. حاول مرة أخرى بعد دقيقة.";
+
+        } else if (error.status === 400) {
+
+            errorMessage.textContent =
+                "⚠️ الطلب غير صالح. راجع محتوى الرسالة وإعدادات الاتصال.";
+
+        } else if (error.status === 403 || error.status === 401) {
+
+            errorMessage.textContent =
+                "⚠️ مشكلة في صلاحيات مفتاح Gemini API. راجع إعدادات المفتاح.";
+
+        } else {
+
+            errorMessage.textContent =
+                "⚠️ تعذر الاتصال بالمساعد الذكي. تأكد من الإنترنت وحاول مجددًا.";
+        }
+
+        chatBody.appendChild(errorMessage);
+        chatBody.scrollTop = chatBody.scrollHeight;
+    }
+}
+
+
+      window.toggleChatWindow = function() {
+          const win = document.getElementById("chat-window");
+          if (win.classList.contains("hidden")) {
+              win.classList.remove("hidden");
+              setTimeout(() => {
+                  win.classList.remove("scale-95", "opacity-0");
+                  win.classList.add("scale-100", "opacity-100");
+              }, 10);
+          } else {
+              win.classList.remove("scale-100", "opacity-100");
+              win.classList.add("scale-95", "opacity-0");
+              setTimeout(() => {
+                  win.classList.add("hidden");
+              }, 300);
+          }
+      }
+
+      // خلفية النجوم التفاعلية
+      document.addEventListener("DOMContentLoaded", () => {
+        const canvas = document.getElementById("space-canvas");
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+
+        let width = (canvas.width = window.innerWidth);
+        let height = (canvas.height = window.innerHeight);
+
+        window.addEventListener("resize", () => {
+          width = canvas.width = window.innerWidth;
+          height = canvas.height = window.innerHeight;
+        });
+
+        const particlesCount = Math.floor((width * height) / 9000);
+        const particles = [];
+
+        class Star {
+          constructor() {
+            this.x = Math.random() * width;
+            this.y = Math.random() * height;
+            this.vx = (Math.random() - 0.5) * 0.6;
+            this.vy = (Math.random() - 0.5) * 0.6;
+            this.size = Math.random() * 0.9 + 0.4;
+          }
+
+          update() {
+            this.x += this.vx;
+            this.y += this.vy;
+            if (this.x < 0 || this.x > width) this.vx *= -1;
+            if (this.y < 0 || this.y > height) this.vy *= -1;
+          }
+
+          draw() {
+            ctx.fillStyle = "#ffffff";
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        for (let i = 0; i < particlesCount; i++) {
+          particles.push(new Star());
+        }
+
+        function animate() {
+          ctx.clearRect(0, 0, width, height);
+          particles.forEach(p => {
+            p.update();
+            p.draw();
+          });
+          requestAnimationFrame(animate);
+        }
+        animate();
+      });
+    </script>
+  </body>
+  </html> 
+
+
+
+
+  <!-- AQ.Ab8RN6JNYqHYF-S3d1WcsgkODvsIHyHQ5AyTgDh_iRQuoD-ihA -->
